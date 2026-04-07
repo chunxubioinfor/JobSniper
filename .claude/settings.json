@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import json; f=open\\('/Users/hanchunxu/Desktop/Job_dk/data/output/url_cache.json'\\); d=json.load\\(f\\); keys=list\\(d.keys\\(\\)\\)[:3]; print\\('Cache entries:', len\\(d\\)\\); print\\('\\\\nSample key:', keys[0]\\); print\\('\\\\nSample entry structure:'\\); import pprint; pprint.pprint\\(d[keys[0]], width=120\\)\")",
+      "Bash(python3)",
+      "Bash(wc -l /Users/hanchunxu/Desktop/Job_dk/data/input/*.csv)",
+      "Bash(find /Users/hanchunxu/Desktop/Job_dk -name \"*.py\" -type f ! -path \"*/.venv/*\" -exec grep -l \"job-tracker\\\\|job_tracker\" {} \\\\;)",
+      "Bash(git init:*)",
+      "Bash(git remote:*)"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+# LLM scoring — OpenAI-compatible SDK (works with any proxy like GlobalAI)
+openai>=1.0.0
+
+# Job scraping — Apify SDK to trigger LinkedIn Jobs Scraper
+apify-client>=1.0.0
+
+# Supabase — push scored jobs to the job-tracker database
+supabase>=2.0.0
+
+# Environment variables — load secrets from .env file
+python-dotenv>=1.0.0
+
+# Progress bars — visual feedback during scoring loop
+tqdm>=4.64.0
