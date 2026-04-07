@@ -88,11 +88,26 @@ def save_to_supabase(scored_jobs: list[dict]) -> tuple[int, int]:
 
     sb = create_client(supabase_url, supabase_key)
 
-    # Step 1: Get all existing job URLs to check for duplicates
-    # We fetch all URLs at once rather than querying per-job (much faster)
-    existing = sb.from_("jobs").select("url").execute()
-    existing_urls = {row["url"] for row in existing.data if row.get("url")}
-    logger.info("Found %d existing jobs in database", len(existing_urls))
+    # Step 1: Fetch existing jobs for deduplication
+    # We grab url + title + company once, then build fast lookup structures
+    existing = sb.from_("jobs").select("url, title, company").execute()
+
+    existing_linkedin_ids: set[str] = set()
+    existing_title_company: set[tuple[str, str]] = set()
+    for row in existing.data:
+        url = row.get("url") or ""
+        lid = _extract_linkedin_job_id(url)
+        if lid:
+            existing_linkedin_ids.add(lid)
+        title = (row.get("title") or "").strip().lower()
+        company = (row.get("company") or "").strip().lower()
+        if title and company:
+            existing_title_company.add((title, company))
+
+    logger.info(
+        "Found %d existing jobs (%d LinkedIn IDs, %d title+company pairs)",
+        len(existing.data), len(existing_linkedin_ids), len(existing_title_company),
+    )
 
     today = date.today().isoformat()
     inserted = 0
@@ -101,20 +116,20 @@ def save_to_supabase(scored_jobs: list[dict]) -> tuple[int, int]:
     for job in scored_jobs:
         link = job.get("link", "")
 
-        # Deduplicate by URL
-        if link in existing_urls:
-            logger.debug("Skipped (duplicate): %s", job.get("title", "?"))
+        # Deduplicate: LinkedIn job ID first (handles query-param variations)
+        job_id = _extract_linkedin_job_id(link)
+        if job_id and job_id in existing_linkedin_ids:
+            logger.debug("Skipped (duplicate LinkedIn ID): %s", job.get("title", "?"))
             skipped += 1
             continue
 
-        # Also check by LinkedIn job ID (handles URL variations)
-        job_id = _extract_linkedin_job_id(link)
-        if job_id:
-            is_dup = any(_extract_linkedin_job_id(u) == job_id for u in existing_urls)
-            if is_dup:
-                logger.debug("Skipped (duplicate ID): %s", job.get("title", "?"))
-                skipped += 1
-                continue
+        # Fallback: title + company match (catches non-LinkedIn or ID-less URLs)
+        title_lower = (job.get("title") or "").strip().lower()
+        company_lower = (job.get("company") or "").strip().lower()
+        if title_lower and company_lower and (title_lower, company_lower) in existing_title_company:
+            logger.debug("Skipped (duplicate title+company): %s", job.get("title", "?"))
+            skipped += 1
+            continue
 
         # Map the pipeline score (0-100) to the job-tracker's 1-10 scale
         overall_score = job.get("scores", {}).get("overall", 0)
@@ -159,7 +174,11 @@ def save_to_supabase(scored_jobs: list[dict]) -> tuple[int, int]:
         try:
             sb.from_("jobs").insert(row).execute()
             inserted += 1
-            existing_urls.add(link)  # track so we don't insert twice in same run
+            # Track so we don't insert twice in the same run
+            if job_id:
+                existing_linkedin_ids.add(job_id)
+            if title_lower and company_lower:
+                existing_title_company.add((title_lower, company_lower))
             logger.debug("Inserted: %s @ %s", row["title"], row["company"])
         except Exception as e:
             logger.error(
